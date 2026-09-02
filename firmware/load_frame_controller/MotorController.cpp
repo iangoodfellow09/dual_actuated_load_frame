@@ -3,6 +3,7 @@
 #include "MotorController.h"
 #include "Config.h"
 
+
 /*
  * ============================================================
  * INTERNAL STATE
@@ -17,6 +18,19 @@ static MotorDirection motorDirection =
 
 /*
  * ============================================================
+ * AXIS STEP FREQUENCY STATE
+ * ============================================================
+ */
+
+static unsigned long motor1StepSPS =
+    DEFAULT_STEP_SPS;
+
+static unsigned long motor2StepSPS =
+    DEFAULT_STEP_SPS;
+
+
+/*
+ * ============================================================
  * INITIALIZATION
  * ============================================================
  */
@@ -24,8 +38,8 @@ static MotorDirection motorDirection =
 void initializeMotors()
 {
     /*
-     * Set enable pins HIGH before switching them to outputs.
-     * HIGH = disabled on the known-good DM542T wiring.
+     * Put enable outputs into the disabled state before
+     * configuring them as outputs.
      */
 
     digitalWrite(
@@ -38,25 +52,61 @@ void initializeMotors()
         MOTOR_DISABLE_LEVEL
     );
 
-    pinMode(MOTOR1_EN_PIN, OUTPUT);
-    pinMode(MOTOR2_EN_PIN, OUTPUT);
+    /*
+     * Configure enable pins.
+     */
+
+    pinMode(
+        MOTOR1_EN_PIN,
+        OUTPUT
+    );
+
+    pinMode(
+        MOTOR2_EN_PIN,
+        OUTPUT
+    );
 
     /*
      * Configure STEP and DIR pins.
      */
 
-    pinMode(MOTOR1_STEP_PIN, OUTPUT);
-    pinMode(MOTOR1_DIR_PIN, OUTPUT);
+    pinMode(
+        MOTOR1_STEP_PIN,
+        OUTPUT
+    );
 
-    pinMode(MOTOR2_STEP_PIN, OUTPUT);
-    pinMode(MOTOR2_DIR_PIN, OUTPUT);
+    pinMode(
+        MOTOR1_DIR_PIN,
+        OUTPUT
+    );
+
+    pinMode(
+        MOTOR2_STEP_PIN,
+        OUTPUT
+    );
+
+    pinMode(
+        MOTOR2_DIR_PIN,
+        OUTPUT
+    );
 
     /*
-     * Safe output states.
+     * STEP outputs inactive.
      */
 
-    digitalWrite(MOTOR1_STEP_PIN, LOW);
-    digitalWrite(MOTOR2_STEP_PIN, LOW);
+    digitalWrite(
+        MOTOR1_STEP_PIN,
+        LOW
+    );
+
+    digitalWrite(
+        MOTOR2_STEP_PIN,
+        LOW
+    );
+
+    /*
+     * Set known direction states.
+     */
 
     digitalWrite(
         MOTOR1_DIR_PIN,
@@ -69,7 +119,7 @@ void initializeMotors()
     );
 
     /*
-     * Explicitly confirm disabled state.
+     * Explicitly confirm both drivers are disabled.
      */
 
     digitalWrite(
@@ -82,14 +132,30 @@ void initializeMotors()
         MOTOR_DISABLE_LEVEL
     );
 
+    /*
+     * Reset software state.
+     */
+
     motorEnabledState = false;
-    motorDirection = MotorDirection::STOPPED;
+
+    motorDirection =
+        MotorDirection::STOPPED;
+
+    /*
+     * Reset both axes to default speed.
+     */
+
+    motor1StepSPS =
+        DEFAULT_STEP_SPS;
+
+    motor2StepSPS =
+        DEFAULT_STEP_SPS;
 }
 
 
 /*
  * ============================================================
- * ENABLE
+ * ENABLE MOTORS
  * ============================================================
  */
 
@@ -111,21 +177,28 @@ void enableMotors()
 
 /*
  * ============================================================
- * DISABLE
+ * DISABLE MOTORS
  * ============================================================
  */
 
 void disableMotors()
 {
     /*
-     * Ensure STEP lines are inactive.
+     * Ensure STEP outputs are inactive.
      */
 
-    digitalWrite(MOTOR1_STEP_PIN, LOW);
-    digitalWrite(MOTOR2_STEP_PIN, LOW);
+    digitalWrite(
+        MOTOR1_STEP_PIN,
+        LOW
+    );
+
+    digitalWrite(
+        MOTOR2_STEP_PIN,
+        LOW
+    );
 
     /*
-     * Disable both DM542T drivers.
+     * Disable both motor drivers.
      */
 
     digitalWrite(
@@ -139,13 +212,15 @@ void disableMotors()
     );
 
     motorEnabledState = false;
-    motorDirection = MotorDirection::STOPPED;
+
+    motorDirection =
+        MotorDirection::STOPPED;
 }
 
 
 /*
  * ============================================================
- * ENABLE STATUS
+ * MOTOR ENABLE STATUS
  * ============================================================
  */
 
@@ -157,8 +232,11 @@ bool motorsEnabled()
 
 /*
  * ============================================================
- * DIRECTION TESTS
+ * JOG FORWARD STATE
  * ============================================================
+ *
+ * This currently changes direction state only.
+ * It does not generate continuous motion.
  */
 
 bool jogMotorForward()
@@ -178,11 +256,18 @@ bool jogMotorForward()
         MOTOR_FORWARD_LEVEL
     );
 
-    motorDirection = MotorDirection::FORWARD;
+    motorDirection =
+        MotorDirection::FORWARD;
 
     return true;
 }
 
+
+/*
+ * ============================================================
+ * JOG REVERSE STATE
+ * ============================================================
+ */
 
 bool jogMotorReverse()
 {
@@ -201,7 +286,8 @@ bool jogMotorReverse()
         MOTOR_REVERSE_LEVEL
     );
 
-    motorDirection = MotorDirection::REVERSE;
+    motorDirection =
+        MotorDirection::REVERSE;
 
     return true;
 }
@@ -209,26 +295,34 @@ bool jogMotorReverse()
 
 /*
  * ============================================================
- * STOP STATE
+ * STOP MOTOR STATE
  * ============================================================
  *
  * NOTE:
- * This does NOT interrupt an active blocking stepMotor() call.
- * Proper interruptible motion will come later.
+ * This cannot interrupt an active blocking stepMotor() call.
+ * Non-blocking motion control will be implemented later.
  */
 
 void stopMotor()
 {
-    digitalWrite(MOTOR1_STEP_PIN, LOW);
-    digitalWrite(MOTOR2_STEP_PIN, LOW);
+    digitalWrite(
+        MOTOR1_STEP_PIN,
+        LOW
+    );
 
-    motorDirection = MotorDirection::STOPPED;
+    digitalWrite(
+        MOTOR2_STEP_PIN,
+        LOW
+    );
+
+    motorDirection =
+        MotorDirection::STOPPED;
 }
 
 
 /*
  * ============================================================
- * DIRECTION STATUS
+ * GET CURRENT DIRECTION STATE
  * ============================================================
  */
 
@@ -240,8 +334,137 @@ MotorDirection getMotorDirection()
 
 /*
  * ============================================================
+ * SET STEP FREQUENCY
+ * ============================================================
+ */
+
+bool setMotorStepFrequency(
+    uint8_t axis,
+    unsigned long stepsPerSecond
+)
+{
+    /*
+     * Reject speeds outside configured limits.
+     */
+
+    if (
+        stepsPerSecond < MIN_STEP_SPS ||
+        stepsPerSecond > MAX_STEP_SPS
+    )
+    {
+        return false;
+    }
+
+    /*
+     * Axis 1.
+     */
+
+    if (axis == 1)
+    {
+        motor1StepSPS =
+            stepsPerSecond;
+
+        return true;
+    }
+
+    /*
+     * Axis 2.
+     */
+
+    if (axis == 2)
+    {
+        motor2StepSPS =
+            stepsPerSecond;
+
+        return true;
+    }
+
+    /*
+     * Invalid axis.
+     */
+
+    return false;
+}
+
+
+/*
+ * ============================================================
+ * GET STEP FREQUENCY
+ * ============================================================
+ */
+
+unsigned long getMotorStepFrequency(
+    uint8_t axis
+)
+{
+    if (axis == 1)
+    {
+        return motor1StepSPS;
+    }
+
+    if (axis == 2)
+    {
+        return motor2StepSPS;
+    }
+
+    /*
+     * Invalid axis.
+     */
+
+    return 0;
+}
+
+
+/*
+ * ============================================================
+ * BLOCKING MICROSECOND DELAY HELPER
+ * ============================================================
+ *
+ * Long delays are split into milliseconds plus the remaining
+ * microseconds.
+ *
+ * This is temporary and will eventually be replaced by
+ * non-blocking/timer-based motion control.
+ */
+
+static void waitMicroseconds(
+    unsigned long microseconds
+)
+{
+    while (
+        microseconds >= 1000UL
+    )
+    {
+        delay(1);
+
+        microseconds -=
+            1000UL;
+    }
+
+    if (microseconds > 0)
+    {
+        delayMicroseconds(
+            static_cast<unsigned int>(
+                microseconds
+            )
+        );
+    }
+}
+
+
+/*
+ * ============================================================
  * BASIC STEP OUTPUT
  * ============================================================
+ *
+ * This is currently a blocking step generator.
+ *
+ * The selected axis:
+ *
+ * 1. Uses its configured SPS value
+ * 2. Sets DIR
+ * 3. Generates the requested number of STEP pulses
+ * 4. Returns when the movement is complete
  */
 
 bool stepMotor(
@@ -251,13 +474,17 @@ bool stepMotor(
 )
 {
     /*
-     * Motion is forbidden while drivers are disabled.
+     * Motors must already be enabled.
      */
 
     if (!motorEnabledState)
     {
         return false;
     }
+
+    /*
+     * Reject zero-step commands.
+     */
 
     if (steps == 0)
     {
@@ -268,26 +495,98 @@ bool stepMotor(
     uint8_t dirPin;
 
     /*
-     * Select actuator.
+     * ========================================================
+     * SELECT AXIS
+     * ========================================================
      */
 
     if (axis == 1)
     {
-        stepPin = MOTOR1_STEP_PIN;
-        dirPin  = MOTOR1_DIR_PIN;
+        stepPin =
+            MOTOR1_STEP_PIN;
+
+        dirPin =
+            MOTOR1_DIR_PIN;
     }
+
     else if (axis == 2)
     {
-        stepPin = MOTOR2_STEP_PIN;
-        dirPin  = MOTOR2_DIR_PIN;
+        stepPin =
+            MOTOR2_STEP_PIN;
+
+        dirPin =
+            MOTOR2_DIR_PIN;
     }
+
     else
     {
         return false;
     }
 
+
     /*
-     * Set direction.
+     * ========================================================
+     * GET AXIS STEP FREQUENCY
+     * ========================================================
+     */
+
+    unsigned long stepsPerSecond =
+        getMotorStepFrequency(
+            axis
+        );
+
+    if (
+        stepsPerSecond == 0
+    )
+    {
+        return false;
+    }
+
+
+    /*
+     * ========================================================
+     * CONVERT SPS TO STEP PERIOD
+     * ========================================================
+     *
+     * Examples:
+     *
+     * 500 SPS  = 2000 us per step
+     * 1000 SPS = 1000 us per step
+     * 2000 SPS = 500 us per step
+     * 5000 SPS = 200 us per step
+     */
+
+    unsigned long stepPeriodUs =
+        1000000UL /
+        stepsPerSecond;
+
+
+    /*
+     * STEP_HIGH_US occupies part of the full period.
+     */
+
+    unsigned long stepLowTimeUs;
+
+    if (
+        stepPeriodUs >
+        STEP_HIGH_US
+    )
+    {
+        stepLowTimeUs =
+            stepPeriodUs -
+            STEP_HIGH_US;
+    }
+
+    else
+    {
+        stepLowTimeUs = 1;
+    }
+
+
+    /*
+     * ========================================================
+     * SET DIRECTION
+     * ========================================================
      */
 
     digitalWrite(
@@ -302,14 +601,21 @@ bool stepMotor(
             ? MotorDirection::FORWARD
             : MotorDirection::REVERSE;
 
+
     /*
-     * Allow direction input to settle before stepping.
+     * Give the DM542T direction signal time to settle before
+     * the first STEP pulse.
      */
 
-    delayMicroseconds(DIR_SETUP_US);
+    delayMicroseconds(
+        DIR_SETUP_US
+    );
+
 
     /*
-     * Temporary blocking pulse generator.
+     * ========================================================
+     * GENERATE STEP PULSES
+     * ========================================================
      */
 
     for (
@@ -318,20 +624,46 @@ bool stepMotor(
         ++i
     )
     {
-        digitalWrite(stepPin, HIGH);
+        /*
+         * STEP high.
+         */
+
+        digitalWrite(
+            stepPin,
+            HIGH
+        );
 
         delayMicroseconds(
             STEP_HIGH_US
         );
 
-        digitalWrite(stepPin, LOW);
+        /*
+         * STEP low.
+         */
 
-        delayMicroseconds(
-            STEP_LOW_US
+        digitalWrite(
+            stepPin,
+            LOW
+        );
+
+        /*
+         * Wait for the remainder of the step period.
+         */
+
+        waitMicroseconds(
+            stepLowTimeUs
         );
     }
 
-    motorDirection = MotorDirection::STOPPED;
+
+    /*
+     * ========================================================
+     * MOVE COMPLETE
+     * ========================================================
+     */
+
+    motorDirection =
+        MotorDirection::STOPPED;
 
     return true;
 }

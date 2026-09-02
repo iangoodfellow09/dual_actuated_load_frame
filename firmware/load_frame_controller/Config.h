@@ -72,3 +72,21 @@ constexpr unsigned long STEP_LOW_US  = 1000;
  */
 
 constexpr unsigned long MAX_MANUAL_STEPS = 20000;
+
+/*
+ * ============================================================
+ * STEP FREQUENCY SETTINGS
+ * ============================================================
+ *
+ * Speed is expressed in steps per second (SPS).
+ *
+ * These are conservative limits for the current blocking
+ * step generator. We can increase them later when we move to
+ * timer-based/non-blocking pulse generation.
+ */
+
+constexpr unsigned long DEFAULT_STEP_SPS = 1000;
+
+constexpr unsigned long MIN_STEP_SPS = 50;
+
+constexpr unsigned long MAX_STEP_SPS = 5000;

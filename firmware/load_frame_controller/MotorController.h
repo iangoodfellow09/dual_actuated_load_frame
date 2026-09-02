@@ -25,6 +25,21 @@ void stopMotor();
 MotorDirection getMotorDirection();
 
 /*
+ * ============================================================
+ * STEP FREQUENCY CONTROL
+ * ============================================================
+ */
+
+bool setMotorStepFrequency(
+    uint8_t axis,
+    unsigned long stepsPerSecond
+);
+
+unsigned long getMotorStepFrequency(
+    uint8_t axis
+);
+
+/*
  * Temporary blocking step command.
  */
 

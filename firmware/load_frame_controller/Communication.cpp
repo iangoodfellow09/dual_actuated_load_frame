@@ -27,7 +27,7 @@ static void processStepCommand(
 )
 {
     /*
-     * Locate command separators.
+     * Locate commas.
      */
 
     int comma1 =
@@ -45,6 +45,11 @@ static void processStepCommand(
             comma2 + 1
         );
 
+
+    /*
+     * Verify command format.
+     */
+
     if (
         comma1 < 0 ||
         comma2 < 0 ||
@@ -58,8 +63,9 @@ static void processStepCommand(
         return;
     }
 
+
     /*
-     * Extract parameters.
+     * Extract fields.
      */
 
     String axisString =
@@ -79,12 +85,16 @@ static void processStepCommand(
             comma3 + 1
         );
 
+
     axisString.trim();
     stepsString.trim();
     directionString.trim();
 
+
     /*
-     * Axis
+     * ========================================================
+     * AXIS
+     * ========================================================
      */
 
     int axis =
@@ -102,14 +112,19 @@ static void processStepCommand(
         return;
     }
 
+
     /*
-     * Steps
+     * ========================================================
+     * STEP COUNT
+     * ========================================================
      */
 
     long requestedSteps =
         stepsString.toInt();
 
-    if (requestedSteps <= 0)
+    if (
+        requestedSteps <= 0
+    )
     {
         Serial.println(
             "ERROR:INVALID_STEPS"
@@ -132,8 +147,11 @@ static void processStepCommand(
         return;
     }
 
+
     /*
-     * Direction
+     * ========================================================
+     * DIRECTION
+     * ========================================================
      */
 
     bool forward;
@@ -161,8 +179,11 @@ static void processStepCommand(
         return;
     }
 
+
     /*
-     * Motor must already be enabled.
+     * ========================================================
+     * ENABLE CHECK
+     * ========================================================
      */
 
     if (!motorsEnabled())
@@ -174,8 +195,11 @@ static void processStepCommand(
         return;
     }
 
+
     /*
-     * Execute move.
+     * ========================================================
+     * EXECUTE MOVE
+     * ========================================================
      */
 
     bool success =
@@ -198,8 +222,11 @@ static void processStepCommand(
         return;
     }
 
+
     /*
-     * Confirmation.
+     * ========================================================
+     * CONFIRMATION
+     * ========================================================
      */
 
     Serial.print(
@@ -230,7 +257,193 @@ static void processStepCommand(
 
 /*
  * ============================================================
- * INITIALIZATION
+ * PARAMETERIZED SPEED COMMAND
+ * ============================================================
+ *
+ * Format:
+ *
+ * SPEED,<axis>,<steps_per_second>
+ *
+ * Examples:
+ *
+ * SPEED,1,500
+ * SPEED,1,2000
+ * SPEED,2,1000
+ */
+
+static void processSpeedCommand(
+    const String &command
+)
+{
+    /*
+     * Locate commas.
+     */
+
+    int comma1 =
+        command.indexOf(',');
+
+    int comma2 =
+        command.indexOf(
+            ',',
+            comma1 + 1
+        );
+
+
+    /*
+     * Verify command format.
+     */
+
+    if (
+        comma1 < 0 ||
+        comma2 < 0
+    )
+    {
+        Serial.println(
+            "ERROR:SPEED_FORMAT"
+        );
+
+        return;
+    }
+
+
+    /*
+     * Extract fields.
+     */
+
+    String axisString =
+        command.substring(
+            comma1 + 1,
+            comma2
+        );
+
+    String speedString =
+        command.substring(
+            comma2 + 1
+        );
+
+
+    axisString.trim();
+    speedString.trim();
+
+
+    /*
+     * ========================================================
+     * AXIS
+     * ========================================================
+     */
+
+    int axis =
+        axisString.toInt();
+
+    if (
+        axis != 1 &&
+        axis != 2
+    )
+    {
+        Serial.println(
+            "ERROR:INVALID_AXIS"
+        );
+
+        return;
+    }
+
+
+    /*
+     * ========================================================
+     * SPEED
+     * ========================================================
+     */
+
+    long requestedSpeed =
+        speedString.toInt();
+
+    if (
+        requestedSpeed <= 0
+    )
+    {
+        Serial.println(
+            "ERROR:INVALID_SPEED"
+        );
+
+        return;
+    }
+
+
+    /*
+     * Check configured limits.
+     */
+
+    if (
+        requestedSpeed <
+            static_cast<long>(
+                MIN_STEP_SPS
+            )
+        ||
+        requestedSpeed >
+            static_cast<long>(
+                MAX_STEP_SPS
+            )
+    )
+    {
+        Serial.println(
+            "ERROR:SPEED_LIMIT"
+        );
+
+        return;
+    }
+
+
+    /*
+     * ========================================================
+     * STORE SPEED
+     * ========================================================
+     */
+
+    bool success =
+        setMotorStepFrequency(
+            static_cast<uint8_t>(
+                axis
+            ),
+            static_cast<unsigned long>(
+                requestedSpeed
+            )
+        );
+
+    if (!success)
+    {
+        Serial.println(
+            "ERROR:SPEED_FAILED"
+        );
+
+        return;
+    }
+
+
+    /*
+     * ========================================================
+     * CONFIRMATION
+     * ========================================================
+     */
+
+    Serial.print(
+        "OK:SPEED,AXIS="
+    );
+
+    Serial.print(axis);
+
+    Serial.print(
+        ",SPS="
+    );
+
+    Serial.println(
+        requestedSpeed
+    );
+}
+
+
+/*
+ * ============================================================
+ * INITIALIZE SERIAL COMMUNICATION
  * ============================================================
  */
 
@@ -240,7 +453,16 @@ void initializeCommunication()
         SERIAL_BAUD_RATE
     );
 
+    /*
+     * Allow serial connection to initialize.
+     */
+
     delay(500);
+
+
+    /*
+     * Startup information.
+     */
 
     Serial.println();
 
@@ -268,12 +490,16 @@ void initializeCommunication()
 
 /*
  * ============================================================
- * SERIAL COMMAND PROCESSING
+ * PROCESS SERIAL COMMANDS
  * ============================================================
  */
 
 void processSerialCommunication()
 {
+    /*
+     * No serial data available.
+     */
+
     if (
         Serial.available() <= 0
     )
@@ -281,12 +507,22 @@ void processSerialCommunication()
         return;
     }
 
+
+    /*
+     * Read one command.
+     */
+
     String command =
         Serial.readStringUntil(
             '\n'
         );
 
     command.trim();
+
+
+    /*
+     * Ignore empty commands.
+     */
 
     if (
         command.length() == 0
@@ -297,9 +533,9 @@ void processSerialCommunication()
 
 
     /*
-     * --------------------------------------------------------
+     * ========================================================
      * PING
-     * --------------------------------------------------------
+     * ========================================================
      */
 
     if (
@@ -313,9 +549,9 @@ void processSerialCommunication()
 
 
     /*
-     * --------------------------------------------------------
+     * ========================================================
      * ENABLE
-     * --------------------------------------------------------
+     * ========================================================
      */
 
     else if (
@@ -331,9 +567,9 @@ void processSerialCommunication()
 
 
     /*
-     * --------------------------------------------------------
+     * ========================================================
      * DISABLE
-     * --------------------------------------------------------
+     * ========================================================
      */
 
     else if (
@@ -349,9 +585,9 @@ void processSerialCommunication()
 
 
     /*
-     * --------------------------------------------------------
+     * ========================================================
      * STOP
-     * --------------------------------------------------------
+     * ========================================================
      */
 
     else if (
@@ -367,9 +603,12 @@ void processSerialCommunication()
 
 
     /*
-     * --------------------------------------------------------
-     * DIRECTION TESTS
-     * --------------------------------------------------------
+     * ========================================================
+     * JOG FORWARD
+     * ========================================================
+     *
+     * Currently changes direction state only.
+     * Continuous jog motion will come later.
      */
 
     else if (
@@ -384,6 +623,7 @@ void processSerialCommunication()
                 "MOTOR=FORWARD"
             );
         }
+
         else
         {
             Serial.println(
@@ -392,6 +632,12 @@ void processSerialCommunication()
         }
     }
 
+
+    /*
+     * ========================================================
+     * JOG REVERSE
+     * ========================================================
+     */
 
     else if (
         command == "JOG_REVERSE"
@@ -405,6 +651,7 @@ void processSerialCommunication()
                 "MOTOR=REVERSE"
             );
         }
+
         else
         {
             Serial.println(
@@ -415,15 +662,19 @@ void processSerialCommunication()
 
 
     /*
-     * --------------------------------------------------------
+     * ========================================================
      * STATUS
-     * --------------------------------------------------------
+     * ========================================================
      */
 
     else if (
         command == "STATUS"
     )
     {
+        /*
+         * Motor enable state.
+         */
+
         if (
             motorsEnabled()
         )
@@ -432,6 +683,7 @@ void processSerialCommunication()
                 "MOTORS=ENABLED"
             );
         }
+
         else
         {
             Serial.println(
@@ -439,8 +691,14 @@ void processSerialCommunication()
             );
         }
 
+
+        /*
+         * Direction state.
+         */
+
         MotorDirection direction =
             getMotorDirection();
+
 
         if (
             direction ==
@@ -468,13 +726,39 @@ void processSerialCommunication()
                 "MOTOR=STOPPED"
             );
         }
+
+
+        /*
+         * Axis 1 speed.
+         */
+
+        Serial.print(
+            "AXIS1_SPS="
+        );
+
+        Serial.println(
+            getMotorStepFrequency(1)
+        );
+
+
+        /*
+         * Axis 2 speed.
+         */
+
+        Serial.print(
+            "AXIS2_SPS="
+        );
+
+        Serial.println(
+            getMotorStepFrequency(2)
+        );
     }
 
 
     /*
-     * --------------------------------------------------------
-     * STEP
-     * --------------------------------------------------------
+     * ========================================================
+     * STEP COMMAND
+     * ========================================================
      */
 
     else if (
@@ -490,9 +774,27 @@ void processSerialCommunication()
 
 
     /*
-     * --------------------------------------------------------
+     * ========================================================
+     * SPEED COMMAND
+     * ========================================================
+     */
+
+    else if (
+        command.startsWith(
+            "SPEED,"
+        )
+    )
+    {
+        processSpeedCommand(
+            command
+        );
+    }
+
+
+    /*
+     * ========================================================
      * UNKNOWN COMMAND
-     * --------------------------------------------------------
+     * ========================================================
      */
 
     else
